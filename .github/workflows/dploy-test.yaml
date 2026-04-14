@@ -1,0 +1,97 @@
+name: "Hello Service Build and Push"
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repository
+        uses: actions/checkout@v2
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v2
+        with:
+          java-version: '11'
+          distribution: 'adopt'
+
+      - name: Build with Maven
+        run: mvn package
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app.jar
+          path: target/helloservice-1.jar
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Public ECR
+        uses: docker/login-action@v1
+        with:
+          registry: public.ecr.aws
+
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app.jar
+
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: 973397181887.dkr.ecr.us-east-1.amazonaws.com
+          ECR_REPOSITORY: java-repo
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Checkout target repository
+        uses: actions/checkout@v3
+        with:
+          repository: devops4solutions/deploy-argocd-app
+          path: target-repo
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Update tag in values.yaml
+        run: |
+          cd target-repo/deploy/dev
+          sed -i "s/^  tag: .*/  tag: ${{ github.sha }}/" values.yaml
+
+          cd ../test
+          sed -i "s/^  tag: .*/  tag: ${{ github.sha }}/" values.yaml
+
+          cd ../prod
+          sed -i "s/^  tag: .*/  tag: ${{ github.sha }}/" values.yaml
+
+      - name: Configure Git
+        run: |
+          cd target-repo
+          git config --unset-all http.https://github.com/.extraheader || true
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - name: Add and commit the file
+        run: |
+          cd target-repo
+          git add .
+          git commit -m "Updated tag in values.yaml via GitHub Actions" || echo "No changes to commit"
+
+      - name: Push changes
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          cd target-repo
+          git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/devops4solutions/deploy-argocd-app.git
+          git fetch origin main
+          git pull --rebase
+          git push
