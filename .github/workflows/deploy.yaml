@@ -27,17 +27,14 @@ jobs:
           name: app.jar
           path: target/helloservice-1.jar
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-1
-
-      - name: Login to Public ECR
-        uses: docker/login-action@v1
-        with:
-          registry: public.ecr.aws
+          
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Download Artifact
         uses: actions/download-artifact@v4
@@ -58,7 +55,7 @@ jobs:
       - name: Checkout target repository
         uses: actions/checkout@v3
         with:
-          repository: devops4solutions/deploy-argocd-app
+          repository: sanjay-1992/deploy-argocd-app
           path: target-repo
           token: ${{ secrets.PAT_TOKEN }}
 
@@ -85,7 +82,7 @@ jobs:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           cd target-repo
-          git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/devops4solutions/deploy-argocd-app.git
+          git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/sanjay-1992/deploy-argocd-app.git
           git fetch origin main
           git pull --rebase
           git push
