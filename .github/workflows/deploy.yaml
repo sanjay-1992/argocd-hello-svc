@@ -47,8 +47,8 @@ jobs:
       - name: Build, tag, and push image to Amazon ECR
         id: build-image
         env:
-          ECR_REGISTRY: public.ecr.aws/w0f5g4k6
-          ECR_REPOSITORY: hello-svc
+          ECR_REGISTRY: 973397181887.dkr.ecr.us-east-1.amazonaws.com
+          ECR_REPOSITORY: java-repo
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
@@ -65,12 +65,6 @@ jobs:
       - name: Update tag in values.yaml
         run: |
           cd target-repo/deploy/dev
-          sed -i "s/^  tag: .*/  tag: ${{ github.sha }}/" values.yaml
-
-          cd ../test
-          sed -i "s/^  tag: .*/  tag: ${{ github.sha }}/" values.yaml
-
-          cd ../prod
           sed -i "s/^  tag: .*/  tag: ${{ github.sha }}/" values.yaml
 
       - name: Configure Git
